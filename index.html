@@ -146,6 +146,18 @@ function draw() {
     fill(0, 0, 0, 150);
     rect(0, 0, 1920, 1080);
 
+    // Check if match is over (someone reached 100 points)
+    let matchOver = (playerScore >= 100 || opponentScore >= 100);
+
+    if (matchOver) {
+      // Game Over Screen Text
+      fill(255);
+      textSize(48);
+      let outcomeText = (playerScore >= 100) ? "You lost!" : "You won!";
+      text(outcomeText, 1920 / 2, 1080 / 2 - 90);
+    }
+
+    // Continue Button
     fill(200, 150, 0);
     stroke(255);
     rect(1920 / 2 - 150, 1080 / 2 - 40, 300, 80, 10);
@@ -188,11 +200,10 @@ function drawGameElements() {
   textAlign(LEFT, TOP);
   text("You: " + playerScore + " | Opponent: " + opponentScore, 30, 30);
   text("Current Turn: " + (isPlayerTurn ? "You" : "Opponent"), 30, 65);
-  textAlign(CENTER, CENTER);
-
+  
   // Version Number Bottom Left
   textAlign(LEFT, BOTTOM);
-  text("v1.3", 30, 1050);
+  text("v1.4", 30, 1050);
 
   textAlign(CENTER, CENTER);
 
@@ -525,7 +536,7 @@ function executeAITurn() {
     }
   }
 
-  // AI Exchange Logic for Pair (Open card <= 5 or any open card completing a pair)
+  // AI Exchange Logic for Pair
   if (topOpen !== null && openSize > 0) {
     let valueCounts = {};
     for (let c of opponentHand) {
@@ -538,8 +549,6 @@ function executeAITurn() {
       let candidateIndices = [];
       for (let i = 0; i < opponentSize; i++) {
         let val = opponentHand[i].value;
-        // AI should not exchange a card of 5 or lower unless it gets a pair (which this does),
-        // and we want to get rid of cards higher than 5 (highest first).
         if (val > 5) {
           let count = valueCounts[val];
           if (count !== 2) {
@@ -564,7 +573,7 @@ function executeAITurn() {
         pendingAITurn = false;
         isPlayerTurn = true;
         opponentHand[bestIdx] = topOpen;
-        statusMessage = "Opponent took open card. Your turn.";
+        statusMessage = "Opponent took open card to form a pair. Your turn.";
         return;
       }
     }
@@ -577,7 +586,6 @@ function executeAITurn() {
       valueCounts[c.value] = (valueCounts[c.value] || 0) + 1;
     }
 
-    // Find highest card > 5 that is not part of a strict pair (count === 2)
     let candidateIndices = [];
     for (let i = 0; i < opponentSize; i++) {
       let val = opponentHand[i].value;
@@ -595,7 +603,6 @@ function executeAITurn() {
         }
       }
     } else {
-      // Fallback to absolute highest card if all are pairs or <= 5
       for (let i = 1; i < opponentSize; i++) {
         if (opponentHand[i].value > opponentHand[targetIdx].value) {
           targetIdx = i;
@@ -611,7 +618,7 @@ function executeAITurn() {
     isPlayerTurn = true;
     opponentHand[targetIdx] = deck.pop();
     deckSize--;
-    statusMessage = "Opponent drew blind. Your turn.";
+    statusMessage = "Opponent drew blind to replace a high card. Your turn.";
     return;
   }
 }
@@ -630,10 +637,10 @@ function handlePlayerCallIt() {
 
   revealOpponentCards = true;
   if (opponentSum > playerCardVal) {
-    statusMessage = "You won! Press Continue.";
+    statusMessage = "You won round! Press Continue.";
     opponentScore += opponentSum;
   } else {
-    statusMessage = "Lost call! Press Continue.";
+    statusMessage = "Lost round call! Press Continue.";
     playerScore += playerCardVal + 10;
   }
   callItGameOverPaused = true;
@@ -645,10 +652,10 @@ function executeAICallIt() {
 
   revealOpponentCards = true;
   if (playerSum > aiCardVal) {
-    statusMessage = "Opponent called it and won! Press Continue.";
+    statusMessage = "Opponent called it and lost! Press Continue.";
     playerScore += playerSum;
   } else {
-    statusMessage = "Opponent called it and lost! Press Continue.";
+    statusMessage = "Opponent called it and won! Press Continue.";
     opponentScore += aiCardVal + 10;
   }
   callItGameOverPaused = true;
