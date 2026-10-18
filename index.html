@@ -57,7 +57,6 @@ let statusMessage = "Click deck to draw, or select a card.";
 let isPlayerTurn = true;
 let roundStartedByPlayer = true;
 
-// AI Memory for Player's single card when taken from open pile
 let knownPlayerCardValue = null;
 
 let waitingForAI = false;
@@ -328,7 +327,6 @@ function mousePressed() {
       playerHand[selectedCardIndex] = deck.pop();
       deckSize--;
       
-      // If player had 1 card and drew blind, reset known card memory
       if (playerSize === 1) {
         knownPlayerCardValue = null;
       }
@@ -357,7 +355,6 @@ function mousePressed() {
         return;
       }
 
-      // Track if player has 1 card left and takes a low card (<= 5) from the open pile
       if (playerSize === 1 && topOpen.value <= 5) {
         knownPlayerCardValue = topOpen.value;
       } else if (playerSize === 1) {
@@ -451,7 +448,6 @@ function executeAITurn() {
   if (opponentSize === 1 && opponentHand[0].value <= 5) {
     let shouldCall = true;
 
-    // If AI knows player's single card value and AI's card is equal or higher, bypass call!
     if (knownPlayerCardValue !== null && opponentHand[0].value >= knownPlayerCardValue) {
       shouldCall = false;
     }
@@ -523,39 +519,94 @@ function executeAITurn() {
     }
   }
 
-  // AI Fallback low open card take (Action 2)
-  if (topOpen !== null && topOpen.value <= 5 && openSize > 0) {
-    let highIdx = 0;
-    for (let i = 1; i < opponentSize; i++) {
-      if (opponentHand[i].value > opponentHand[highIdx].value) highIdx = i;
+  // AI Exchange Logic for Pair (Open card <= 5 or any open card completing a pair)
+  if (topOpen !== null && openSize > 0) {
+    let valueCounts = {};
+    for (let c of opponentHand) {
+      valueCounts[c.value] = (valueCounts[c.value] || 0) + 1;
     }
-    openSize--;
-    animCards = [opponentHand[highIdx]];
-    animCardCount = 1;
-    animatingPlay = true;
-    animStartTime = millis();
-    pendingAITurn = false;
-    isPlayerTurn = true;
-    opponentHand[highIdx] = topOpen;
-    statusMessage = "Opponent took low open card. Your turn.";
-    return;
+
+    let hasSingleOfOpen = (valueCounts[topOpen.value] === 1);
+
+    if (hasSingleOfOpen) {
+      let candidateIndices = [];
+      for (let i = 0; i < opponentSize; i++) {
+        let val = opponentHand[i].value;
+        // AI should not exchange a card of 5 or lower unless it gets a pair (which this does),
+        // and we want to get rid of cards higher than 5 (highest first).
+        if (val > 5) {
+          let count = valueCounts[val];
+          if (count !== 2) {
+            candidateIndices.push(i);
+          }
+        }
+      }
+
+      if (candidateIndices.length > 0) {
+        let bestIdx = candidateIndices[0];
+        for (let idx of candidateIndices) {
+          if (opponentHand[idx].value > opponentHand[bestIdx].value) {
+            bestIdx = idx;
+          }
+        }
+
+        openSize--;
+        animCards = [opponentHand[bestIdx]];
+        animCardCount = 1;
+        animatingPlay = true;
+        animStartTime = millis();
+        pendingAITurn = false;
+        isPlayerTurn = true;
+        opponentHand[bestIdx] = topOpen;
+        statusMessage = "Opponent took open card to form a pair. Your turn.";
+        return;
+      }
+    }
   }
 
-  // AI Blind Draw (Action 1)
+  // AI Blind Draw / Regular Turn: Try to get rid of cards higher than 5
   if (deckSize > 0) {
-    let highIdx = 0;
-    for (let i = 1; i < opponentSize; i++) {
-      if (opponentHand[i].value > opponentHand[highIdx].value) highIdx = i;
+    let valueCounts = {};
+    for (let c of opponentHand) {
+      valueCounts[c.value] = (valueCounts[c.value] || 0) + 1;
     }
-    animCards = [opponentHand[highIdx]];
+
+    // Find highest card > 5 that is not part of a strict pair (count === 2)
+    let candidateIndices = [];
+    for (let i = 0; i < opponentSize; i++) {
+      let val = opponentHand[i].value;
+      if (val > 5 && valueCounts[val] !== 2) {
+        candidateIndices.push(i);
+      }
+    }
+
+    let targetIdx = 0;
+    if (candidateIndices.length > 0) {
+      targetIdx = candidateIndices[0];
+      for (let idx of candidateIndices) {
+        if (opponentHand[idx].value > opponentHand[targetIdx].value) {
+          targetIdx = idx;
+        }
+      }
+    } else {
+      // Fallback to absolute highest card if all are pairs or <= 5
+      for (let i = 1; i < opponentSize; i++) {
+        if (opponentHand[i].value > opponentHand[targetIdx].value) {
+          targetIdx = i;
+        }
+      }
+    }
+
+    animCards = [opponentHand[targetIdx]];
     animCardCount = 1;
     animatingPlay = true;
     animStartTime = millis();
     pendingAITurn = false;
     isPlayerTurn = true;
-    opponentHand[highIdx] = deck.pop();
+    opponentHand[targetIdx] = deck.pop();
     deckSize--;
-    statusMessage = "Opponent drew blind. Your turn.";
+    statusMessage = "Opponent drew blind to replace a high card. Your turn.";
+    return;
   }
 }
 
