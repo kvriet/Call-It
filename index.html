@@ -9,14 +9,15 @@
     body {
       background: #111;
       margin: 0;
+      padding: 0;
+      overflow: hidden;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
-      overflow: hidden;
     }
     canvas {
-      box-shadow: 0 0 20px rgba(0,0,0,0.8);
+      display: block;
     }
   </style>
 </head>
@@ -69,11 +70,15 @@ let callItGameOverPaused = false;
 let revealOpponentCards = false;
 
 function setup() {
-  createCanvas(1920, 1080);
+  createCanvas(windowWidth, windowHeight);
   textAlign(CENTER, CENTER);
   roundStartedByPlayer = Math.random() >= 0.5;
   isPlayerTurn = roundStartedByPlayer;
   initGame();
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
 }
 
 function initGame() {
@@ -127,18 +132,26 @@ function initGame() {
 function draw() {
   background(40, 120, 60);
 
+  // Scale relative to 1920x1080 design resolution
+  let sx = width / 1920;
+  let sy = height / 1080;
+
+  push();
+  scale(sx, sy);
+
   if (callItGameOverPaused) {
     drawGameElements();
     fill(0, 0, 0, 150);
-    rect(0, 0, width, height);
+    rect(0, 0, 1920, 1080);
 
     fill(200, 150, 0);
     stroke(255);
-    rect(width / 2 - 150, height / 2 - 40, 300, 80, 10);
+    rect(1920 / 2 - 150, 1080 / 2 - 40, 300, 80, 10);
     fill(255);
     textSize(28);
-    text("Continue", width / 2, height / 2);
+    text("Continue", 1920 / 2, 1080 / 2);
     noStroke();
+    pop();
     return;
   }
 
@@ -164,6 +177,7 @@ function draw() {
   }
 
   drawGameElements();
+  pop();
 }
 
 function drawGameElements() {
@@ -180,7 +194,7 @@ function drawGameElements() {
   rect(360, 40, 1200, 160, 12);
   fill(255);
   textSize(22);
-  text("Opponent's Hand (" + opponentSize + " cards)", width / 2, 75);
+  text("Opponent's Hand (" + opponentSize + " cards)", 1920 / 2, 75);
   
   for (let i = 0; i < opponentSize; i++) {
     let cx = 420 + i * 110;
@@ -220,7 +234,7 @@ function drawGameElements() {
   rect(360, 820, 1200, 210, 12);
   fill(255);
   textSize(22);
-  text("Your Hand", width / 2, 850);
+  text("Your Hand", 1920 / 2, 850);
 
   for (let i = 0; i < playerSize; i++) {
     let x = 420 + i * 150;
@@ -232,7 +246,7 @@ function drawGameElements() {
 
   fill(255);
   textSize(20);
-  text(statusMessage, width / 2, 1045);
+  text(statusMessage, 1920 / 2, 1045);
 
   let canCall = (playerSize === 1 && playerHand[0].value <= 5);
   fill(canCall ? color(200, 150, 0) : color(120));
@@ -284,8 +298,14 @@ function drawSuitSymbol(cx, cy, sz, suit) {
 }
 
 function mousePressed() {
+  // Map mouse coordinates back to 1920x1080 scale space
+  let sx = width / 1920;
+  let sy = height / 1080;
+  let mX = mouseX / sx;
+  let mY = mouseY / sy;
+
   if (callItGameOverPaused) {
-    if (mouseX >= width / 2 - 150 && mouseX <= width / 2 + 150 && mouseY >= height / 2 - 40 && mouseY <= height / 2 + 40) {
+    if (mX >= 1920 / 2 - 150 && mX <= 1920 / 2 + 150 && mY >= 1080 / 2 - 40 && mY <= 1080 / 2 + 40) {
       if (playerScore >= 100 || opponentScore >= 100) {
         playerScore = 0;
         opponentScore = 0;
@@ -300,7 +320,7 @@ function mousePressed() {
   if (!isPlayerTurn || waitingForAI || animatingPlay) return;
 
   // Click Deck (Action 1)
-  if (mouseX >= 760 && mouseX <= 900 && mouseY >= 450 && mouseY <= 640) {
+  if (mX >= 760 && mX <= 900 && mY >= 450 && mY <= 640) {
     if (selectedCardIndex !== -1 && deckSize > 0) {
       let discarded = playerHand[selectedCardIndex];
       playerHand[selectedCardIndex] = deck.pop();
@@ -320,7 +340,7 @@ function mousePressed() {
   }
 
   // Click Open Pile (Action 2)
-  if (mouseX >= 1020 && mouseX <= 1160 && mouseY >= 450 && mouseY <= 640) {
+  if (mX >= 1020 && mX <= 1160 && mY >= 450 && mY <= 640) {
     if (openSize > 0 && selectedCardIndex !== -1) {
       let topOpen = openPile[openSize - 1];
       let chosen = playerHand[selectedCardIndex];
@@ -349,7 +369,7 @@ function mousePressed() {
   for (let i = 0; i < playerSize; i++) {
     let x = 420 + i * 150;
     let y = 850;
-    if (mouseX >= x && mouseX <= x + 110 && mouseY >= y && mouseY <= y + 150) {
+    if (mX >= x && mX <= x + 110 && mY >= y && mY <= y + 150) {
       if (selectedCardIndex === -1) {
         selectedCardIndex = i;
         statusMessage = "Selected card rank " + playerHand[i].getRankStr() + ".";
@@ -398,7 +418,7 @@ function mousePressed() {
   }
 
   // Call It Button
-  if (mouseX >= 1640 && mouseX <= 1820 && mouseY >= 1005 && mouseY <= 1060) {
+  if (mX >= 1640 && mX <= 1820 && mY >= 1005 && mY <= 1060) {
     if (playerSize === 1 && playerHand[0].value <= 5) {
       handlePlayerCallIt();
     }
