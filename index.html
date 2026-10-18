@@ -190,6 +190,12 @@ function drawGameElements() {
   text("Current Turn: " + (isPlayerTurn ? "You" : "Opponent"), 30, 65);
   textAlign(CENTER, CENTER);
 
+  // Version Number Bottom Left
+  textAlign(LEFT, BOTTOM);
+  text("v1.3", 30, 1050);
+
+  textAlign(CENTER, CENTER);
+
   // Opponent Hand
   fill(200, 50, 50);
   noStroke();
@@ -558,7 +564,7 @@ function executeAITurn() {
         pendingAITurn = false;
         isPlayerTurn = true;
         opponentHand[bestIdx] = topOpen;
-        statusMessage = "Opponent took open card to form a pair. Your turn.";
+        statusMessage = "Opponent took open card. Your turn.";
         return;
       }
     }
@@ -605,7 +611,7 @@ function executeAITurn() {
     isPlayerTurn = true;
     opponentHand[targetIdx] = deck.pop();
     deckSize--;
-    statusMessage = "Opponent drew blind to replace a high card. Your turn.";
+    statusMessage = "Opponent drew blind. Your turn.";
     return;
   }
 }
