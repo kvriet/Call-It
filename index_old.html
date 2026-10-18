@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Call It - Card Game</title>
+  <!-- Load p5.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+  <style>
+    body {
+      background: #111;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<script>
+class Card {
+  constructor(s, v) {
+    this.suit = s; // 0: Hearts, 1: Diamonds, 2: Clubs, 3: Spades
+    this.value = v; // 1 to 13
+  }
+
+  getRankStr() {
+    if (this.value === 1) return "A";
+    if (this.value === 11) return "J";
+    if (this.value === 12) return "Q";
+    if (this.value === 13) return "K";
+    return String(this.value);
+  }
+}
+
+// Game state variables
+let deck = [];
+let deckSize = 52;
+let openPile = [];
+let openSize = 0;
+let playerHand = [];
+let playerSize = 0;
+let opponentHand = [];
+let opponentSize = 0;
+
+let playerScore = 0;
+let opponentScore = 0;
+let selectedCardIndex = -1;
+let statusMessage = "Click deck to draw, or select a card.";
+
+let isPlayerTurn = true;
+let roundStartedByPlayer = true;
+
+let waitingForAI = false;
+let aiTurnTime = 0;
+
+let animatingPlay = false;
+let animStartTime = 0;
+let animCards = [];
+let animCardCount = 0;
+let pendingAITurn = false;
+
+let callItGameOverPaused = false;
+let revealOpponentCards = false;
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  textAlign(CENTER, CENTER);
+  roundStartedByPlayer = Math.random() >= 0.5;
+  isPlayerTurn = roundStartedByPlayer;
+  initGame();
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+}
+
+function initGame() {
+  deck = [];
+  for (let s = 0; s < 4; s++) {
+    for (let v = 1; v <= 13; v++) {
+      deck.push(new Card(s, v));
+    }
+  }
+  // Shuffle
+  for (let i = deck.length - 1; i > 0; i--) {
+    let j = Math.floor(Math.random() * (i + 1));
+    let temp = deck[i];
+    deck[i] = deck[j];
+    deck[j] = temp;
+  }
+  deckSize = deck.length;
+
+  playerHand = [];
+  opponentHand = [];
+  playerSize = 0;
+  opponentSize = 0;
+  
+  for (let i = 0; i < 5; i++) {
+    playerHand.push(deck.pop());
+    playerSize++;
+    opponentHand.push(deck.pop());
+    opponentSize++;
+    deckSize -= 2;
+  }
+
+  openPile = [deck.pop()];
+  openSize = 1;
+  deckSize--;
+
+  selectedCardIndex = -1;
+  waitingForAI = false;
+  animatingPlay = false;
+  callItGameOverPaused = false;
+  revealOpponentCards = false;
+
+  isPlayerTurn = roundStartedByPlayer;
+  if (!isPlayerTurn) {
+    statusMessage = "Opponent's turn. Thinking...";
+    startAITurn();
+  } else {
+    statusMessage = "Your turn. Click deck or select cards.";
+  }
+}
+
+function draw() {
+  background(40, 120, 60);
+
+  // Scale relative to 1920x1080 design resolution
+  let sx = width / 1920;
+  let sy = height / 1080;
+
+  push();
+  scale(sx, sy);
+
+  if (callItGameOverPaused) {
+    drawGameElements();
+    fill(0, 0, 0, 150);
+    rect(0, 0, 1920, 1080);
+
+    fill(200, 150, 0);
+    stroke(255);
+    rect(1920 / 2 - 150, 1080 / 2 - 40, 300, 80, 10);
+    fill(255);
+    textSize(28);
+    text("Continue", 1920 / 2, 1080 / 2);
+    noStroke();
+    pop();
+    return;
+  }
+
+  if (animatingPlay && millis() - animStartTime >= 2000) {
+    animatingPlay = false;
+    for (let i = 0; i < animCardCount; i++) {
+      openPile.push(animCards[i]);
+      openSize++;
+    }
+    animCardCount = 0;
+    
+    if (pendingAITurn) {
+      pendingAITurn = false;
+      isPlayerTurn = false;
+      waitingForAI = true;
+      aiTurnTime = millis() + 2000;
+    }
+  }
+
+  if (waitingForAI && millis() >= aiTurnTime) {
+    executeAITurn();
+    waitingForAI = false;
+  }
+
+  drawGameElements();
+  pop();
+}
+
+function drawGameElements() {
+  fill(255);
+  textSize(20);
+  textAlign(LEFT, TOP);
+  text("You: " + playerScore + " | Opponent: " + opponentScore, 30, 30);
+  text("Current Turn: " + (isPlayerTurn ? "You" : "Opponent"), 30, 65);
+  textAlign(CENTER, CENTER);
+
+  // Opponent Hand
+  fill(200, 50, 50);
+  noStroke();
+  rect(360, 40, 1200, 160, 12);
+  fill(255);
+  textSize(22);
+  text("Opponent's Hand (" + opponentSize + " cards)", 1920 / 2, 75);
+  
+  for (let i = 0; i < opponentSize; i++) {
+    let cx = 420 + i * 110;
+    let cy = 110;
+    if (revealOpponentCards) {
+      drawCard(cx, cy, 90, 130, opponentHand[i], false);
+    } else {
+      fill(100, 20, 20);
+      stroke(255);
+      rect(cx, cy, 90, 130, 8);
+      fill(255);
+      textSize(28);
+      text("?", cx + 45, cy + 65);
+      noStroke();
+    }
+  }
+
+  // Deck & Open Pile
+  fill(80);
+  rect(760, 450, 140, 190, 10);
+  fill(255);
+  textSize(20);
+  text("Deck\n(" + deckSize + ")", 830, 545);
+
+  if (openSize > 0) {
+    drawCard(1020, 450, 140, 190, openPile[openSize - 1], false);
+  }
+
+  if (animatingPlay) {
+    for (let i = 0; i < animCardCount; i++) {
+      drawCard(1180 + i * 150, 450, 130, 190, animCards[i], false);
+    }
+  }
+
+  // Player Hand
+  fill(50, 80, 140);
+  rect(360, 820, 1200, 210, 12);
+  fill(255);
+  textSize(22);
+  text("Your Hand", 1920 / 2, 850);
+
+  for (let i = 0; i < playerSize; i++) {
+    let x = 420 + i * 150;
+    let y = 880;
+    let isSelected = (selectedCardIndex === i);
+    if (isSelected) y -= 30;
+    drawCard(x, y, 110, 150, playerHand[i], isSelected);
+  }
+
+  fill(255);
+  textSize(20);
+  text(statusMessage, 1920 / 2, 1045);
+
+  let canCall = (playerSize === 1 && playerHand[0].value <= 5);
+  fill(canCall ? color(200, 150, 0) : color(120));
+  rect(1640, 1005, 180, 55, 8);
+  fill(255);
+  textSize(22);
+  text("Call It", 1730, 1032);
+}
+
+function drawCard(x, y, w, h, c, isSelected) {
+  if (isSelected) {
+    fill(255, 255, 0);
+    rect(x - 4, y - 4, w + 8, h + 8, 8);
+  }
+  
+  fill(255);
+  stroke(0);
+  rect(x, y, w, h, 8);
+
+  fill(c.suit === 0 || c.suit === 1 ? color(200, 0, 0) : color(0));
+  textSize(18);
+  textAlign(LEFT, TOP);
+  text(c.getRankStr(), x + 8, y + 8);
+
+  drawSuitSymbol(x + w / 2, y + h / 2, w * 0.3, c.suit);
+  textAlign(CENTER, CENTER);
+  noStroke();
+}
+
+function drawSuitSymbol(cx, cy, sz, suit) {
+  noStroke();
+  if (suit === 0) {
+    ellipse(cx - sz * 0.22, cy - sz * 0.1, sz * 0.45, sz * 0.45);
+    ellipse(cx + sz * 0.22, cy - sz * 0.1, sz * 0.45, sz * 0.45);
+    triangle(cx - sz * 0.44, cy, cx + sz * 0.44, cy, cx, cy + sz * 0.5);
+  } else if (suit === 1) {
+    quad(cx, cy - sz * 0.5, cx + sz * 0.35, cy, cx, cy + sz * 0.5, cx - sz * 0.35, cy);
+  } else if (suit === 2) {
+    ellipse(cx, cy - sz * 0.2, sz * 0.35, sz * 0.35);
+    ellipse(cx - sz * 0.22, cy + sz * 0.15, sz * 0.35, sz * 0.35);
+    ellipse(cx + sz * 0.22, cy + sz * 0.15, sz * 0.35, sz * 0.35);
+    rect(cx - sz * 0.08, cy, sz * 0.16, sz * 0.4);
+  } else if (suit === 3) {
+    ellipse(cx - sz * 0.22, cy + sz * 0.1, sz * 0.45, sz * 0.45);
+    ellipse(cx + sz * 0.22, cy + sz * 0.1, sz * 0.45, sz * 0.45);
+    triangle(cx - sz * 0.44, cy, cx + sz * 0.44, cy, cx, cy - sz * 0.5);
+    rect(cx - sz * 0.08, cy, sz * 0.16, sz * 0.4);
+  }
+}
+
+function mousePressed() {
+  // Map mouse coordinates back to 1920x1080 scale space
+  let sx = width / 1920;
+  let sy = height / 1080;
+  let mX = mouseX / sx;
+  let mY = mouseY / sy;
+
+  if (callItGameOverPaused) {
+    if (mX >= 1920 / 2 - 150 && mX <= 1920 / 2 + 150 && mY >= 1080 / 2 - 40 && mY <= 1080 / 2 + 40) {
+      if (playerScore >= 100 || opponentScore >= 100) {
+        playerScore = 0;
+        opponentScore = 0;
+        statusMessage = "New Game Started!";
+      }
+      roundStartedByPlayer = !roundStartedByPlayer;
+      initGame();
+    }
+    return;
+  }
+
+  if (!isPlayerTurn || waitingForAI || animatingPlay) return;
+
+  // Click Deck (Action 1)
+  if (mX >= 760 && mX <= 900 && mY >= 450 && mY <= 640) {
+    if (selectedCardIndex !== -1 && deckSize > 0) {
+      let discarded = playerHand[selectedCardIndex];
+      playerHand[selectedCardIndex] = deck.pop();
+      deckSize--;
+      
+      animCards = [discarded];
+      animCardCount = 1;
+      animatingPlay = true;
+      animStartTime = millis();
+      pendingAITurn = true;
+      
+      selectedCardIndex = -1;
+      statusMessage = "Drew card. Opponent's turn next.";
+    } else {
+      statusMessage = "Select a card from your hand first to discard.";
+    }
+  }
+
+  // Click Open Pile (Action 2)
+  if (mX >= 1020 && mX <= 1160 && mY >= 450 && mY <= 640) {
+    if (openSize > 0 && selectedCardIndex !== -1) {
+      let topOpen = openPile[openSize - 1];
+      let chosen = playerHand[selectedCardIndex];
+      
+      if (chosen.value === topOpen.value && chosen.suit === topOpen.suit) {
+        statusMessage = "Cannot play the exact card just taken!";
+        return;
+      }
+      
+      openSize--; 
+      animCards = [chosen];
+      animCardCount = 1;
+      animatingPlay = true;
+      animStartTime = millis();
+      pendingAITurn = true;
+      
+      playerHand[selectedCardIndex] = topOpen;
+      selectedCardIndex = -1;
+      statusMessage = "Took open card. Opponent's turn next.";
+    } else {
+      statusMessage = "Select a card from your hand to exchange.";
+    }
+  }
+
+  // Player Hand Cards
+  for (let i = 0; i < playerSize; i++) {
+    let x = 420 + i * 150;
+    let y = 850;
+    if (mX >= x && mX <= x + 110 && mY >= y && mY <= y + 150) {
+      if (selectedCardIndex === -1) {
+        selectedCardIndex = i;
+        statusMessage = "Selected card rank " + playerHand[i].getRankStr() + ".";
+      } else if (selectedCardIndex === i) {
+        selectedCardIndex = -1;
+        statusMessage = "Deselected card.";
+      } else {
+        let c1 = playerHand[selectedCardIndex];
+        let c2 = playerHand[i];
+        let topOpen = openSize > 0 ? openPile[openSize - 1] : null;
+
+        let isSameValue = (c1.value === c2.value);
+        let isSum = (topOpen !== null && (c1.value + c2.value === topOpen.value));
+        let isDiff = (topOpen !== null && (Math.abs(c1.value - c2.value) === topOpen.value));
+
+        if (isSameValue || isSum || isDiff) {
+          if (isSum) {
+            animCards = c1.value >= c2.value ? [c2, c1] : [c1, c2];
+          } else if (isDiff) {
+            animCards = c1.value >= c2.value ? [c1, c2] : [c2, c1];
+          } else {
+            let high = Math.max(selectedCardIndex, i);
+            let low = Math.min(selectedCardIndex, i);
+            animCards = [playerHand[high], playerHand[low]];
+          }
+
+          animCardCount = 2;
+          animatingPlay = true;
+          animStartTime = millis();
+          pendingAITurn = true;
+
+          let high = Math.max(selectedCardIndex, i);
+          let low = Math.min(selectedCardIndex, i);
+          playerHand.splice(high, 1);
+          playerHand.splice(low, 1);
+          playerSize -= 2;
+
+          selectedCardIndex = -1;
+          statusMessage = "Move played!";
+        } else {
+          statusMessage = "Invalid 2-card combination.";
+          selectedCardIndex = -1;
+        }
+      }
+    }
+  }
+
+  // Call It Button
+  if (mX >= 1640 && mX <= 1820 && mY >= 1005 && mY <= 1060) {
+    if (playerSize === 1 && playerHand[0].value <= 5) {
+      handlePlayerCallIt();
+    }
+  }
+}
+
+function startAITurn() {
+  waitingForAI = true;
+  aiTurnTime = millis() + 2000;
+}
+
+function executeAITurn() {
+  if (opponentSize <= 0) return;
+
+  if (opponentSize === 1 && opponentHand[0].value <= 5 && playerSize > 1) {
+    executeAICallIt();
+    return;
+  }
+
+  let topOpen = openSize > 0 ? openPile[openSize - 1] : null;
+
+  // AI Sum
+  if (topOpen !== null) {
+    for (let i = 0; i < opponentSize; i++) {
+      for (let j = i + 1; j < opponentSize; j++) {
+        let v1 = opponentHand[i].value;
+        let v2 = opponentHand[j].value;
+        if (v1 + v2 === topOpen.value) {
+          animCards = v1 >= v2 ? [opponentHand[j], opponentHand[i]] : [opponentHand[i], opponentHand[j]];
+          animCardCount = 2;
+          animatingPlay = true;
+          animStartTime = millis();
+          pendingAITurn = false;
+          isPlayerTurn = true;
+          removeOpponentCards(j, i);
+          statusMessage = "Opponent matched open card (Sum). Your turn.";
+          return;
+        }
+      }
+    }
+  }
+
+  // AI Difference
+  if (topOpen !== null) {
+    for (let i = 0; i < opponentSize; i++) {
+      for (let j = i + 1; j < opponentSize; j++) {
+        let v1 = opponentHand[i].value;
+        let v2 = opponentHand[j].value;
+        if (Math.abs(v1 - v2) === topOpen.value) {
+          animCards = v1 >= v2 ? [opponentHand[i], opponentHand[j]] : [opponentHand[j], opponentHand[i]];
+          animCardCount = 2;
+          animatingPlay = true;
+          animStartTime = millis();
+          pendingAITurn = false;
+          isPlayerTurn = true;
+          removeOpponentCards(j, i);
+          statusMessage = "Opponent matched open card (Diff). Your turn.";
+          return;
+        }
+      }
+    }
+  }
+
+  // AI Pair
+  for (let i = 0; i < opponentSize; i++) {
+    for (let j = i + 1; j < opponentSize; j++) {
+      if (opponentHand[i].value === opponentHand[j].value) {
+        animCards = [opponentHand[j], opponentHand[i]];
+        animCardCount = 2;
+        animatingPlay = true;
+        animStartTime = millis();
+        pendingAITurn = false;
+        isPlayerTurn = true;
+        removeOpponentCards(j, i);
+        statusMessage = "Opponent played a pair. Your turn.";
+        return;
+      }
+    }
+  }
+
+  // AI Fallback low open card take
+  if (topOpen !== null && topOpen.value <= 5 && openSize > 0) {
+    let highIdx = 0;
+    for (let i = 1; i < opponentSize; i++) {
+      if (opponentHand[i].value > opponentHand[highIdx].value) highIdx = i;
+    }
+    openSize--;
+    animCards = [opponentHand[highIdx]];
+    animCardCount = 1;
+    animatingPlay = true;
+    animStartTime = millis();
+    pendingAITurn = false;
+    isPlayerTurn = true;
+    opponentHand[highIdx] = topOpen;
+    statusMessage = "Opponent took low open card. Your turn.";
+    return;
+  }
+
+  // AI Blind Draw
+  if (deckSize > 0) {
+    let highIdx = 0;
+    for (let i = 1; i < opponentSize; i++) {
+      if (opponentHand[i].value > opponentHand[highIdx].value) highIdx = i;
+    }
+    animCards = [opponentHand[highIdx]];
+    animCardCount = 1;
+    animatingPlay = true;
+    animStartTime = millis();
+    pendingAITurn = false;
+    isPlayerTurn = true;
+    opponentHand[highIdx] = deck.pop();
+    deckSize--;
+    statusMessage = "Opponent drew blind. Your turn.";
+  }
+}
+
+function removeOpponentCards(high, low) {
+  let h = Math.max(high, low);
+  let l = Math.min(high, low);
+  opponentHand.splice(h, 1);
+  opponentHand.splice(l, 1);
+  opponentSize -= 2;
+}
+
+function handlePlayerCallIt() {
+  let opponentSum = opponentHand.reduce((sum, c) => sum + c.value, 0);
+  let playerCardVal = playerHand[0].value;
+
+  revealOpponentCards = true;
+  if (opponentSum > playerCardVal) {
+    statusMessage = "You won! Press Continue.";
+    opponentScore += opponentSum;
+  } else {
+    statusMessage = "Lost call! Press Continue.";
+    playerScore += playerCardVal + 10;
+  }
+  callItGameOverPaused = true;
+}
+
+function executeAICallIt() {
+  let playerSum = playerHand.reduce((sum, c) => sum + c.value, 0);
+  let aiCardVal = opponentHand[0].value;
+
+  revealOpponentCards = true;
+  if (playerSum > aiCardVal) {
+    statusMessage = "Opponent called it and won! Press Continue.";
+    playerScore += playerSum;
+  } else {
+    statusMessage = "Opponent called it and lost! Press Continue.";
+    opponentScore += aiCardVal + 10;
+  }
+  callItGameOverPaused = true;
+}
+</script>
+
+</body>
+</html>

@@ -57,6 +57,9 @@ let statusMessage = "Click deck to draw, or select a card.";
 let isPlayerTurn = true;
 let roundStartedByPlayer = true;
 
+// AI Memory for Player's single card when taken from open pile
+let knownPlayerCardValue = null;
+
 let waitingForAI = false;
 let aiTurnTime = 0;
 
@@ -119,6 +122,7 @@ function initGame() {
   animatingPlay = false;
   callItGameOverPaused = false;
   revealOpponentCards = false;
+  knownPlayerCardValue = null;
 
   isPlayerTurn = roundStartedByPlayer;
   if (!isPlayerTurn) {
@@ -132,7 +136,6 @@ function initGame() {
 function draw() {
   background(40, 120, 60);
 
-  // Scale relative to 1920x1080 design resolution
   let sx = width / 1920;
   let sy = height / 1080;
 
@@ -298,7 +301,6 @@ function drawSuitSymbol(cx, cy, sz, suit) {
 }
 
 function mousePressed() {
-  // Map mouse coordinates back to 1920x1080 scale space
   let sx = width / 1920;
   let sy = height / 1080;
   let mX = mouseX / sx;
@@ -326,6 +328,11 @@ function mousePressed() {
       playerHand[selectedCardIndex] = deck.pop();
       deckSize--;
       
+      // If player had 1 card and drew blind, reset known card memory
+      if (playerSize === 1) {
+        knownPlayerCardValue = null;
+      }
+
       animCards = [discarded];
       animCardCount = 1;
       animatingPlay = true;
@@ -348,6 +355,13 @@ function mousePressed() {
       if (chosen.value === topOpen.value && chosen.suit === topOpen.suit) {
         statusMessage = "Cannot play the exact card just taken!";
         return;
+      }
+
+      // Track if player has 1 card left and takes a low card (<= 5) from the open pile
+      if (playerSize === 1 && topOpen.value <= 5) {
+        knownPlayerCardValue = topOpen.value;
+      } else if (playerSize === 1) {
+        knownPlayerCardValue = null;
       }
       
       openSize--; 
@@ -433,9 +447,19 @@ function startAITurn() {
 function executeAITurn() {
   if (opponentSize <= 0) return;
 
-  if (opponentSize === 1 && opponentHand[0].value <= 5 && playerSize > 1) {
-    executeAICallIt();
-    return;
+  // Check if AI can call it
+  if (opponentSize === 1 && opponentHand[0].value <= 5) {
+    let shouldCall = true;
+
+    // If AI knows player's single card value and AI's card is equal or higher, bypass call!
+    if (knownPlayerCardValue !== null && opponentHand[0].value >= knownPlayerCardValue) {
+      shouldCall = false;
+    }
+
+    if (shouldCall) {
+      executeAICallIt();
+      return;
+    }
   }
 
   let topOpen = openSize > 0 ? openPile[openSize - 1] : null;
@@ -499,7 +523,7 @@ function executeAITurn() {
     }
   }
 
-  // AI Fallback low open card take
+  // AI Fallback low open card take (Action 2)
   if (topOpen !== null && topOpen.value <= 5 && openSize > 0) {
     let highIdx = 0;
     for (let i = 1; i < opponentSize; i++) {
@@ -517,7 +541,7 @@ function executeAITurn() {
     return;
   }
 
-  // AI Blind Draw
+  // AI Blind Draw (Action 1)
   if (deckSize > 0) {
     let highIdx = 0;
     for (let i = 1; i < opponentSize; i++) {
