@@ -2,35 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Call It - Card Game</title>
   <!-- Load p5.js from CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-    body {
+    html, body {
       background: #111;
       margin: 0;
       padding: 0;
       overflow: hidden;
+      width: 100%;
+      height: 100%;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     }
     canvas {
       display: block;
-      touch-action: none;
     }
   </style>
 </head>
 <body>
 
 <script>
-// Card Class representing individual playing cards
 class Card {
   constructor(s, v) {
     this.suit = s; // 0: Hearts, 1: Diamonds, 2: Clubs, 3: Spades
@@ -46,7 +41,7 @@ class Card {
   }
 }
 
-// Game State Variables
+// Game state variables
 let deck = [];
 let deckSize = 52;
 let openPile = [];
@@ -78,14 +73,6 @@ let pendingAITurn = false;
 let callItGameOverPaused = false;
 let revealOpponentCards = false;
 
-// Dynamic coordinate calculation variables
-let CARD_W = 110;
-let CARD_H = 150;
-let OPP_CARD_W = 90;
-let OPP_CARD_H = 130;
-let CARD_GAP = 120;
-let OPP_CARD_GAP = 100;
-
 function setup() {
   createCanvas(windowWidth, windowHeight);
   textAlign(CENTER, CENTER);
@@ -105,7 +92,7 @@ function initGame() {
       deck.push(new Card(s, v));
     }
   }
-  // Shuffle Deck
+  // Shuffle
   for (let i = deck.length - 1; i > 0; i--) {
     let j = Math.floor(Math.random() * (i + 1));
     let temp = deck[i];
@@ -119,7 +106,6 @@ function initGame() {
   playerSize = 0;
   opponentSize = 0;
   
-  // Deal initial hands
   for (let i = 0; i < 5; i++) {
     playerHand.push(deck.pop());
     playerSize++;
@@ -151,43 +137,42 @@ function initGame() {
 function draw() {
   background(40, 120, 60);
 
-  // Scaled dynamic reference frame based on 1920x1080 design space
-  let sx = width / 1920;
-  let sy = height / 1080;
+  let isMobile = (windowWidth < 768) || (windowHeight > windowWidth);
+  let baseWidth = isMobile ? 1000 : 1920;
+  let baseHeight = isMobile ? 1600 : 1080;
+
+  let sx = width / baseWidth;
+  let sy = height / baseHeight;
 
   push();
   scale(sx, sy);
 
-  // Modal screen overlay when round or match completes
   if (callItGameOverPaused) {
-    drawGameElements();
-    fill(0, 0, 0, 160);
-    rect(0, 0, 1920, 1080);
+    drawGameElements(isMobile, baseWidth, baseHeight);
+    fill(0, 0, 0, 150);
+    rect(0, 0, baseWidth, baseHeight);
 
     let matchOver = (playerScore >= 100 || opponentScore >= 100);
 
     if (matchOver) {
       fill(255);
-      textSize(48);
+      textSize(isMobile ? 54 : 48);
       let outcomeText = (playerScore >= 100) ? "You lost!" : "You won!";
-      text(outcomeText, 1920 / 2, 1080 / 2 - 90);
+      text(outcomeText, baseWidth / 2, baseHeight / 2 - 100);
     }
 
-    // Continue / Restart Button
     fill(200, 150, 0);
     stroke(255);
-    strokeWeight(2);
-    rect(1920 / 2 - 150, 1080 / 2 - 40, 300, 80, 12);
+    rect(baseWidth / 2 - 160, baseHeight / 2 - 45, 320, 90, 12);
     fill(255);
+    textSize(32);
+    text("Continue", baseWidth / 2, baseHeight / 2);
     noStroke();
-    textSize(28);
-    text("Continue", 1920 / 2, 1080 / 2);
     pop();
     return;
   }
 
-  // Handle animation timer for playing cards
-  if (animatingPlay && millis() - animStartTime >= 1800) {
+  if (animatingPlay && millis() - animStartTime >= 2000) {
     animatingPlay = false;
     for (let i = 0; i < animCardCount; i++) {
       openPile.push(animCards[i]);
@@ -199,199 +184,163 @@ function draw() {
       pendingAITurn = false;
       isPlayerTurn = false;
       waitingForAI = true;
-      aiTurnTime = millis() + 1500;
+      aiTurnTime = millis() + 2000;
     }
   }
 
-  // Handle AI turn execution delay
   if (waitingForAI && millis() >= aiTurnTime) {
     executeAITurn();
     waitingForAI = false;
   }
 
-  drawGameElements();
+  drawGameElements(isMobile, baseWidth, baseHeight);
   pop();
 }
 
-function drawGameElements() {
-  let centerX = 1920 / 2;
-
-  // --- Header HUD (Centered Scoreboard) ---
-  fill(0, 0, 0, 100);
-  noStroke();
-  rect(centerX - 350, 20, 700, 80, 12);
-
+function drawGameElements(isMobile, baseWidth, baseHeight) {
   fill(255);
-  textSize(22);
-  textAlign(CENTER, CENTER);
-  text("You: " + playerScore + "   |   Opponent: " + opponentScore, centerX, 45);
-  textSize(18);
-  fill(isPlayerTurn ? color(120, 255, 120) : color(255, 200, 120));
-  text("Current Turn: " + (isPlayerTurn ? "You" : "Opponent"), centerX, 75);
-
-  // --- Opponent Hand Box (Moved down slightly to keep top HUD clear) ---
-  let oppCardGap = 105;
-  let oppBoxWidth = Math.max(opponentSize, 1) * oppCardGap + 50;
-  let oppBoxHeight = 160;
-  let oppBoxX = centerX - oppBoxWidth / 2;
-  let oppBoxY = 135;
-
-  fill(200, 50, 50, 220);
-  noStroke();
-  rect(oppBoxX, oppBoxY, oppBoxWidth, oppBoxHeight, 12);
+  textSize(isMobile ? 26 : 20);
   
-  fill(255);
-  textSize(18);
-  text("Opponent's Hand (" + opponentSize + " cards)", centerX, oppBoxY + 25);
+  // HUD Info
+  textAlign(CENTER, TOP);
+  text("You: " + playerScore + " | Opponent: " + opponentScore, baseWidth / 2, 20);
+  text("Current Turn: " + (isPlayerTurn ? "You" : "Opponent"), baseWidth / 2, isMobile ? 60 : 50);
+  
+  // Version Number Bottom Left
+  textAlign(LEFT, BOTTOM);
+  textSize(isMobile ? 22 : 20);
+  text("v1.5.5", 30, baseHeight - 25);
 
-  let oppStartX = centerX - ((opponentSize - 1) * oppCardGap) / 2 - 45;
+  textAlign(CENTER, CENTER);
+
+  // Dynamic Hand Tray Width: Full width on mobile (10px side margins), centered 720px on desktop
+  let traySideMargin = isMobile ? 10 : (baseWidth - 720) / 2; // 600px on desktop
+  let trayWidth = baseWidth - (traySideMargin * 2);
+  
+  // 20px padding on each side (40px total), 10px spacing between 5 cards (40px total)
+  let cardW = (trayWidth - 80) / 5;
+  let cardH = cardW * 1.36; // Constant aspect ratio
+
+  // Opponent Hand Tray
+  let oppTrayY = isMobile ? 100 : 80;
+  let oppTrayH = cardH + 45;
+  fill(200, 50, 50);
+  noStroke();
+  rect(traySideMargin, oppTrayY, trayWidth, oppTrayH, 14);
+  fill(255);
+  textSize(isMobile ? 24 : 20);
+  text("Opponent's Hand (" + opponentSize + " cards)", baseWidth / 2, oppTrayY + 22);
+  
   for (let i = 0; i < opponentSize; i++) {
-    let cx = oppStartX + i * oppCardGap;
-    let cy = oppBoxY + 45;
+    let cx = traySideMargin + 20 + i * (cardW + 10);
+    let cy = oppTrayY + 35;
     if (revealOpponentCards) {
-      drawCard(cx, cy, 90, 105, opponentHand[i], false);
+      drawCard(cx, cy, cardW, cardH, opponentHand[i], false);
     } else {
-      fill(120, 25, 25);
+      fill(100, 20, 20);
       stroke(255);
-      strokeWeight(1.5);
-      rect(cx, cy, 90, 105, 8);
+      rect(cx, cy, cardW, cardH, 8);
       fill(255);
+      textSize(cardW * 0.35);
+      text("?", cx + cardW / 2, cy + cardH / 2);
       noStroke();
-      textSize(26);
-      text("?", cx + 45, cy + 52.5);
     }
   }
 
-  // --- Deck & Open Pile (Shifted 80px to the Left) ---
-  let shiftX = -80;
-  let deckX = centerX - 120 + shiftX;
-  let openX = centerX + 10 + shiftX;
-  let centerPilesY = 430;
-  let centerCardW = 110;
-  let centerCardH = 150;
+  // Deck & Open Pile (Shifted 80px left from center)
+  let centerShift = -80;
+  let deckY = isMobile ? baseHeight / 2 - cardH / 2 : 450;
+  let centerSpacing = 16;
+  let deckX = (baseWidth / 2) + centerShift - cardW - (centerSpacing / 2);
+  let openX = (baseWidth / 2) + centerShift + (centerSpacing / 2);
 
-  // Draw Deck
-  fill(60, 60, 70);
-  stroke(220);
-  strokeWeight(2);
-  rect(deckX, centerPilesY, centerCardW, centerCardH, 10);
-  noStroke();
+  fill(80);
+  stroke(255);
+  rect(deckX, deckY, cardW, cardH, 10);
   fill(255);
-  textSize(18);
-  text("Deck\n(" + deckSize + ")", deckX + centerCardW / 2, centerPilesY + centerCardH / 2);
+  noStroke();
+  textSize(isMobile ? 22 : 18);
+  text("Deck\n(" + deckSize + ")", deckX + cardW / 2, deckY + cardH / 2);
 
-  // Draw Open Pile
   if (openSize > 0) {
-    drawCard(openX, centerPilesY, centerCardW, centerCardH, openPile[openSize - 1], false);
-  } else {
-    fill(0, 0, 0, 40);
-    stroke(255, 100);
-    rect(openX, centerPilesY, centerCardW, centerCardH, 10);
-    noStroke();
+    drawCard(openX, deckY, cardW, cardH, openPile[openSize - 1], false);
   }
 
-  // Draw Card Play Animations (Rendered ON TOP of open pile so it's always visible)
+  // Draw played card animation ON TOP of the open pile so it's always visible
   if (animatingPlay) {
     for (let i = 0; i < animCardCount; i++) {
-      drawCard(openX + i * 120, centerPilesY, centerCardW, centerCardH, animCards[i], false);
+      let animX = openX + cardW + 15 + i * (cardW + 10);
+      drawCard(animX, deckY, cardW, cardH, animCards[i], false);
     }
   }
 
-  // --- Player Hand Box (Moved up slightly) ---
-  let playerCardGap = 130;
-  let playerBoxWidth = Math.max(playerSize, 1) * playerCardGap + 60;
-  let playerBoxHeight = 220;
-  let playerBoxX = centerX - playerBoxWidth / 2;
-  let playerBoxY = 680;
-
-  fill(40, 80, 150, 220);
+  // Player Hand Tray
+  let plyTrayY = isMobile ? baseHeight - cardH - 220 : 780;
+  let plyTrayH = cardH + 50;
+  fill(50, 80, 140);
   noStroke();
-  rect(playerBoxX, playerBoxY, playerBoxWidth, playerBoxHeight, 12);
-  
+  rect(traySideMargin, plyTrayY, trayWidth, plyTrayH, 14);
   fill(255);
-  textSize(20);
-  text("Your Hand", centerX, playerBoxY + 28);
+  textSize(isMobile ? 24 : 20);
+  text("Your Hand", baseWidth / 2, plyTrayY + 22);
 
-  let playerStartX = centerX - ((playerSize - 1) * playerCardGap) / 2 - 55;
   for (let i = 0; i < playerSize; i++) {
-    let x = playerStartX + i * playerCardGap;
-    let y = playerBoxY + 50;
+    let x = traySideMargin + 20 + i * (cardW + 10);
+    let y = plyTrayY + 36;
     let isSelected = (selectedCardIndex === i);
     if (isSelected) y -= 25;
-    drawCard(x, y, 110, 150, playerHand[i], isSelected);
+    drawCard(x, y, cardW, cardH, playerHand[i], isSelected);
   }
 
-  // --- Status Message ---
-  fill(255);
-  textSize(20);
-  textAlign(CENTER, CENTER);
-  text(statusMessage, centerX, 935);
-
-  // --- Call It Button (Repositioned at bottom below status message) ---
+  // Call It Button (Positioned cleanly below the player tray)
   let canCall = (playerSize === 1 && playerHand[0].value <= 5);
-  let btnW = 180;
-  let btnH = 50;
-  let btnX = centerX - btnW / 2;
-  let btnY = 980;
-
-  fill(canCall ? color(220, 160, 0) : color(80, 80, 80, 180));
-  stroke(canCall ? color(255) : color(120));
-  strokeWeight(2);
-  rect(btnX, btnY, btnW, btnH, 10);
-  
-  fill(canCall ? color(255) : color(170));
-  noStroke();
+  fill(canCall ? color(200, 150, 0) : color(120));
+  let btnY = plyTrayY + plyTrayH + 20;
+  rect(baseWidth / 2 - 100, btnY, 200, 50, 10);
+  fill(255);
   textSize(22);
-  text("Call It", centerX, btnY + btnH / 2);
+  text("Call It", baseWidth / 2, btnY + 25);
 
-  // Version Text - Updated to v1.5.4 in Bottom Left
-  fill(200, 200, 200, 180);
-  textSize(14);
-  textAlign(LEFT, BOTTOM);
-  text("v1.5.4", 30, 1050);
+  // Status Message
+  fill(255);
+  textSize(isMobile ? 24 : 20);
+  text(statusMessage, baseWidth / 2, btnY + 80);
 }
 
-// Card Renderer Helper
 function drawCard(x, y, w, h, c, isSelected) {
   if (isSelected) {
-    fill(255, 230, 0);
-    rect(x - 4, y - 4, w + 8, h + 8, 10);
+    fill(255, 255, 0);
+    rect(x - 4, y - 4, w + 8, h + 8, 8);
   }
   
   fill(255);
-  stroke(30);
-  strokeWeight(1.5);
+  stroke(0);
   rect(x, y, w, h, 8);
 
-  let isRed = (c.suit === 0 || c.suit === 1);
-  fill(isRed ? color(210, 30, 30) : color(20, 20, 20));
+  fill(c.suit === 0 || c.suit === 1 ? color(200, 0, 0) : color(0));
   textSize(w * 0.22);
   textAlign(LEFT, TOP);
-  text(c.getRankStr(), x + 7, y + 6);
+  text(c.getRankStr(), x + 8, y + 8);
 
-  drawSuitSymbol(x + w / 2, y + h / 2, w * 0.35, c.suit);
+  drawSuitSymbol(x + w / 2, y + h / 2, w * 0.32, c.suit);
   textAlign(CENTER, CENTER);
   noStroke();
 }
 
-// Vector Suit Icon Generator
 function drawSuitSymbol(cx, cy, sz, suit) {
   noStroke();
-  let isRed = (suit === 0 || suit === 1);
-  fill(isRed ? color(210, 30, 30) : color(20, 20, 20));
-
-  if (suit === 0) { // Heart
+  if (suit === 0) {
     ellipse(cx - sz * 0.22, cy - sz * 0.1, sz * 0.45, sz * 0.45);
     ellipse(cx + sz * 0.22, cy - sz * 0.1, sz * 0.45, sz * 0.45);
     triangle(cx - sz * 0.44, cy, cx + sz * 0.44, cy, cx, cy + sz * 0.5);
-  } else if (suit === 1) { // Diamond
+  } else if (suit === 1) {
     quad(cx, cy - sz * 0.5, cx + sz * 0.35, cy, cx, cy + sz * 0.5, cx - sz * 0.35, cy);
-  } else if (suit === 2) { // Club
+  } else if (suit === 2) {
     ellipse(cx, cy - sz * 0.2, sz * 0.35, sz * 0.35);
     ellipse(cx - sz * 0.22, cy + sz * 0.15, sz * 0.35, sz * 0.35);
     ellipse(cx + sz * 0.22, cy + sz * 0.15, sz * 0.35, sz * 0.35);
     rect(cx - sz * 0.08, cy, sz * 0.16, sz * 0.4);
-  } else if (suit === 3) { // Spade
+  } else if (suit === 3) {
     ellipse(cx - sz * 0.22, cy + sz * 0.1, sz * 0.45, sz * 0.45);
     ellipse(cx + sz * 0.22, cy + sz * 0.1, sz * 0.45, sz * 0.45);
     triangle(cx - sz * 0.44, cy, cx + sz * 0.44, cy, cx, cy - sz * 0.5);
@@ -399,17 +348,23 @@ function drawSuitSymbol(cx, cy, sz, suit) {
   }
 }
 
-// Interaction handling
 function mousePressed() {
-  let sx = width / 1920;
-  let sy = height / 1080;
+  let isMobile = (windowWidth < 768) || (windowHeight > windowWidth);
+  let baseWidth = isMobile ? 1000 : 1920;
+  let baseHeight = isMobile ? 1600 : 1080;
+
+  let sx = width / baseWidth;
+  let sy = height / baseHeight;
   let mX = mouseX / sx;
   let mY = mouseY / sy;
-  let centerX = 1920 / 2;
 
-  // Handle click on round/game over screen
+  let traySideMargin = isMobile ? 10 : (baseWidth - 720) / 2;
+  let trayWidth = baseWidth - (traySideMargin * 2);
+  let cardW = (trayWidth - 80) / 5;
+  let cardH = cardW * 1.36;
+
   if (callItGameOverPaused) {
-    if (mX >= centerX - 150 && mX <= centerX + 150 && mY >= 1080 / 2 - 40 && mY <= 1080 / 2 + 40) {
+    if (mX >= baseWidth / 2 - 160 && mX <= baseWidth / 2 + 160 && mY >= baseHeight / 2 - 45 && mY <= baseHeight / 2 + 45) {
       if (playerScore >= 100 || opponentScore >= 100) {
         playerScore = 0;
         opponentScore = 0;
@@ -423,15 +378,14 @@ function mousePressed() {
 
   if (!isPlayerTurn || waitingForAI || animatingPlay) return;
 
-  let shiftX = -80;
-  let deckX = centerX - 120 + shiftX;
-  let openX = centerX + 10 + shiftX;
-  let centerPilesY = 430;
-  let centerCardW = 110;
-  let centerCardH = 150;
+  let centerShift = -80;
+  let deckY = isMobile ? baseHeight / 2 - cardH / 2 : 450;
+  let centerSpacing = 16;
+  let deckX = (baseWidth / 2) + centerShift - cardW - (centerSpacing / 2);
+  let openX = (baseWidth / 2) + centerShift + (centerSpacing / 2);
 
   // Click Deck
-  if (mX >= deckX && mX <= deckX + centerCardW && mY >= centerPilesY && mY <= centerPilesY + centerCardH) {
+  if (mX >= deckX && mX <= deckX + cardW && mY >= deckY && mY <= deckY + cardH) {
     if (selectedCardIndex !== -1 && deckSize > 0) {
       let discarded = playerHand[selectedCardIndex];
       playerHand[selectedCardIndex] = deck.pop();
@@ -455,7 +409,7 @@ function mousePressed() {
   }
 
   // Click Open Pile
-  if (mX >= openX && mX <= openX + centerCardW && mY >= centerPilesY && mY <= centerPilesY + centerCardH) {
+  if (mX >= openX && mX <= openX + cardW && mY >= deckY && mY <= deckY + cardH) {
     if (openSize > 0 && selectedCardIndex !== -1) {
       let topOpen = openPile[openSize - 1];
       let chosen = playerHand[selectedCardIndex];
@@ -486,14 +440,12 @@ function mousePressed() {
     }
   }
 
-  // Click Player Hand Cards
-  let playerCardGap = 130;
-  let playerStartX = centerX - ((playerSize - 1) * playerCardGap) / 2 - 55;
-  let playerBoxY = 680;
+  // Player Hand Cards
+  let plyTrayY = isMobile ? baseHeight - cardH - 220 : 780;
   for (let i = 0; i < playerSize; i++) {
-    let x = playerStartX + i * playerCardGap;
-    let y = playerBoxY + 50;
-    if (mX >= x && mX <= x + 110 && mY >= y && mY <= y + 150) {
+    let x = traySideMargin + 20 + i * (cardW + 10);
+    let y = plyTrayY + 36;
+    if (mX >= x && mX <= x + cardW && mY >= y && mY <= y + cardH) {
       if (selectedCardIndex === -1) {
         selectedCardIndex = i;
         statusMessage = "Selected card rank " + playerHand[i].getRankStr() + ".";
@@ -541,13 +493,9 @@ function mousePressed() {
     }
   }
 
-  // Click Call It Button
-  let btnW = 180;
-  let btnH = 50;
-  let btnX = centerX - btnW / 2;
-  let btnY = 980;
-
-  if (mX >= btnX && mX <= btnX + btnW && mY >= btnY && mY <= btnY + btnH) {
+  // Call It Button
+  let btnY = plyTrayY + plyTrayH + 20;
+  if (mX >= baseWidth / 2 - 100 && mX <= baseWidth / 2 + 100 && mY >= btnY && mY <= btnY + 50) {
     if (playerSize === 1 && playerHand[0].value <= 5) {
       handlePlayerCallIt();
     }
@@ -556,13 +504,12 @@ function mousePressed() {
 
 function startAITurn() {
   waitingForAI = true;
-  aiTurnTime = millis() + 1500;
+  aiTurnTime = millis() + 2000;
 }
 
 function executeAITurn() {
   if (opponentSize <= 0) return;
 
-  // Check if AI can call it
   if (opponentSize === 1 && opponentHand[0].value <= 5) {
     let shouldCall = true;
 
