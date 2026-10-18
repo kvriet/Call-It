@@ -213,13 +213,11 @@ function drawGameElements(isMobile, baseWidth, baseHeight) {
 
   textAlign(CENTER, CENTER);
 
-  // Dynamic Hand Tray Width: Full width on mobile (10px side margins), centered 720px on desktop
-  let traySideMargin = isMobile ? 10 : (baseWidth - 720) / 2; // 600px on desktop
+  // Dynamic Hand Tray Width
+  let traySideMargin = isMobile ? 10 : (baseWidth - 720) / 2;
   let trayWidth = baseWidth - (traySideMargin * 2);
-  
-  // 20px padding on each side (40px total), 10px spacing between 5 cards (40px total)
   let cardW = (trayWidth - 80) / 5;
-  let cardH = cardW * 1.36; // Constant aspect ratio
+  let cardH = cardW * 1.36;
 
   // Opponent Hand Tray
   let oppTrayY = isMobile ? 100 : 80;
@@ -247,7 +245,7 @@ function drawGameElements(isMobile, baseWidth, baseHeight) {
     }
   }
 
-  // Deck & Open Pile (Shifted 80px left from center)
+  // Deck & Open Pile
   let centerShift = -80;
   let deckY = isMobile ? baseHeight / 2 - cardH / 2 : 450;
   let centerSpacing = 16;
@@ -266,7 +264,6 @@ function drawGameElements(isMobile, baseWidth, baseHeight) {
     drawCard(openX, deckY, cardW, cardH, openPile[openSize - 1], false);
   }
 
-  // Draw played card animation ON TOP of the open pile so it's always visible
   if (animatingPlay) {
     for (let i = 0; i < animCardCount; i++) {
       let animX = openX + cardW + 15 + i * (cardW + 10);
@@ -292,7 +289,7 @@ function drawGameElements(isMobile, baseWidth, baseHeight) {
     drawCard(x, y, cardW, cardH, playerHand[i], isSelected);
   }
 
-  // Call It Button (Positioned cleanly below the player tray)
+  // Call It Button
   let canCall = (playerSize === 1 && playerHand[0].value <= 5);
   fill(canCall ? color(200, 150, 0) : color(120));
   let btnY = plyTrayY + plyTrayH + 20;
@@ -442,6 +439,8 @@ function mousePressed() {
 
   // Player Hand Cards
   let plyTrayY = isMobile ? baseHeight - cardH - 220 : 780;
+  let plyTrayH = cardH + 50;
+  
   for (let i = 0; i < playerSize; i++) {
     let x = traySideMargin + 20 + i * (cardW + 10);
     let y = plyTrayY + 36;
@@ -493,7 +492,7 @@ function mousePressed() {
     }
   }
 
-  // Call It Button
+  // Call It Button Click Area (Fixed matching exact button bounds)
   let btnY = plyTrayY + plyTrayH + 20;
   if (mX >= baseWidth / 2 - 100 && mX <= baseWidth / 2 + 100 && mY >= btnY && mY <= btnY + 50) {
     if (playerSize === 1 && playerHand[0].value <= 5) {
